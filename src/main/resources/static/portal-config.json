@@ -1,0 +1,42 @@
+{
+  "title": "Spring Boot 练习",
+  "subtitle": "欢迎来到门户主页。从下方选择任意一个模块开始探索吧。",
+  "cards": [
+    {
+      "icon": "fas fa-hand-peace",
+      "title": "Hello 页面",
+      "description": "向世界说你好，最简单的 REST 与控制台交互",
+      "url": "/chat.html"
+    },
+    {
+      "icon": "fas fa-users",
+      "title": "用户列表",
+      "description": "查看用户数据，练习 Thymeleaf 或 JSON 返回",
+      "url": "/users"
+    },
+    {
+      "icon": "fas fa-edit",
+      "title": "表单练习",
+      "description": "提交数据，演示 POST 请求与参数绑定",
+      "url": "/form"
+    },
+    {
+      "icon": "fas fa-info-circle",
+      "title": "关于",
+      "description": "项目介绍、技术栈以及常用链接",
+      "url": "/notokenchat.html"
+    },
+    {
+      "icon": "fas fa-database",
+      "title": "数据展示",
+      "description": "数据库查询或内存数据展示",
+      "url": "/data"
+    },
+    {
+      "icon": "fas fa-cog",
+      "title": "设置",
+      "description": "配置项演示或环境信息",
+      "url": "/lianxi.html"
+    }
+  ]
+}

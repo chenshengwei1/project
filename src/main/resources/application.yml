@@ -1,0 +1,237 @@
+# ============================================================
+# AI Agent 应用配置
+# 对应原 dsagent 的 .env + config 配置
+# ============================================================
+
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: spring-boot-ai-agent
+
+  # ============================================================
+  # SQLite 数据源配置（对应原 agent_memory.db）
+  # ============================================================
+  datasource:
+    url: jdbc:sqlite:${user.dir}/data/agent_memory.db
+    driver-class-name: org.sqlite.JDBC
+    username:
+    password:
+
+  # ============================================================
+  # SQL 初始化配置（Spring Boot 4.x 新配置方式）
+  # ============================================================
+  sql:
+    init:
+      schema-locations: classpath:schema.sql
+      mode: always
+      continue-on-error: true
+
+  # ============================================================
+  # Jackson JSON 配置
+  # 注意：Spring Boot 4.x 中 SerializationFeature 枚举值已变更，
+  # WRITE_DATES_AS_TIMESTAMPS 已被移除，用 date-format 控制日期格式即可
+  # ============================================================
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    property-naming-strategy: LOWER_CAMEL_CASE
+
+# ============================================================
+# AI Agent 自定义配置
+# 通过 @ConfigurationProperties(prefix = "ai.agent") 读取
+# ============================================================
+ai:
+  agent:
+    # ---- DeepSeek API 配置 ----
+    deepseek:
+      api-key: sk-ac972af6d763480aa2390a48e0697fae
+      api-url: https://api.deepseek.com/v1/chat/completions
+      model: deepseek-chat
+      max-tokens: 4096
+      temperature: 0.7
+      top-p: 0.95
+      # 请求超时（毫秒）
+      connect-timeout: 30000
+      read-timeout: 60000
+      write-timeout: 30000
+
+    # ---- 工具配置 ----
+    toolcfgs:
+      # 允许工具操作的文件路径白名单（逗号分隔）
+      allowed-paths: ${user.dir},${user.dir}/pages,${user.dir}/data
+      # 允许执行的命令前缀（逗号分隔）
+      allowed-commands: npm,node,git,dir,echo,cat,type,mkdir,copy,del,rm,mv,move
+
+    # ---- 记忆配置 ----
+    memory:
+      enabled: true
+      max-history-per-session: 100
+      # 是否在启动时清理过期的会话
+      auto-clean-expired: true
+      # 会话过期天数（超过此天数未活跃的会话将被清理）
+      session-expire-days: 30
+    # 默认引用 chat.llm.providers 里的模型；用 "provider:modelId" 指定
+    primary: agentai:agnes-2.5-flash
+    backups:
+      - openai:gpt-4o-mini
+      - deepseek:deepseek-chat
+    react:
+      max-steps: 12
+      max-duration-ms: 120000
+      max-tokens-per-request: 50000
+      duplicate-call-threshold: 3
+      max-history-turns: 20
+    timeouts:
+      connect-ms: 5000
+      read-ms: 90000
+      call-ms: 180000
+    retry:
+      per-provider: 1
+      backoff-ms: 500
+    routing:
+      failure-threshold: 3
+      cooldown-seconds: 60
+    stream:
+      sse-timeout-ms: 300000
+      heartbeat-ms: 15000
+      cancel-on-disconnect: true
+    tool:
+      timeout-ms: 10000
+      result-max-bytes: 8192
+      pool-size: 4
+      pool-queue-size: 32
+    session:
+      ttl-minutes: 30
+      cleanup-interval-ms: 600000
+    diag:
+      trace-buffer-size: 100
+      expose-endpoints: true
+    log:
+      log-raw-response: false
+    # 默认工具的安全边界
+    tools:
+      workspace-root: ${user.dir}/data/workspace   # 文件读写与命令执行的工作根目录
+      command-enabled: true
+      command-allowlist: []      # 空=不限制（本地个人场景）；可配 ["ls","cat","grep","pwd","echo"]
+      command-timeout-ms: 10000
+      file-max-bytes: 1048576
+chat:
+  auth:
+    token: test-token
+    secret: "change-me-please-at-least-32-bytes-long-xxxx"
+    token-ttl-minutes: 1440          # token 有效期 24 小时
+  upload:
+    dir: ./data/uploads
+    url-prefix: /uploads
+  data:
+    dir: ./data/json
+  llm:
+    base-url: https://api.openai.com/v1
+    api-key: ""          # 填你的 key；为空时走 Mock 流
+    default-model: agnes-2.5-flash
+    timeout-seconds: 300
+    models-fetch-enabled: true
+    models-cache-seconds: 300
+    # 全局默认
+    defaults:
+      temperature: 0.7
+      top-p: 0.9
+      max-tokens: 4096
+      chat-template-kwargs:
+        enable_thinking: true
+    providers:
+      openai:
+        base-url: https://api.openai.com/v1
+        api-key: sk-openai-xxxx
+        models:
+          - id: gpt-4o-mini
+            name: GPT-4o mini
+            description: 快速、经济的通用模型
+            context-window: 128000
+            supports-deep-think: false
+            supports-web-search: false
+            supports-vision: true
+          - id: deepseek-chat
+            name: DeepSeek Chat
+            description: 深度求索对话模型
+            context-window: 64000
+            supports-deep-think: true
+            supports-web-search: false
+            supports-vision: false
+      deepseek:
+        base-url: https://api.deepseek.com/v1
+        api-key: sk-deepseek-xxxx
+        models:
+          - id: deepseek-chat
+            name: DeepSeek Chat
+            supports-deep-think: true
+          - id: deepseek-reasoner
+            name: DeepSeek Reasoner
+            supports-deep-think: true
+      agentai:
+        base-url: https://apihub.agnes-ai.com/v1
+        api-key: sk-vXRn1UP26oqmhHbo8JyoAYm8zP0M3qFUTHJCYTPZLcK5W26a
+        models:
+          - id: agnes-2.5-flash
+            name: agnes-2.5-flash
+            supports-deep-think: true
+        image-models:
+          - id: agnes-2.5-flash
+            name: agnes-2.5-flash
+
+# ============================================================
+# Actuator 配置
+# ============================================================
+management:
+  endpoint:
+    health:
+      show-details: always
+    info:
+      enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health,info,env
+      base-path: /actuator
+  info:
+    env:
+      enabled: true
+
+# ============================================================
+# 应用信息
+# ============================================================
+info:
+  app:
+    name: AI Agent
+    version: 1.0.0
+    description: 智能开发助手（Spring Boot 版）
+    source: 从 Python Flask dsagent 迁移
+
+# ============================================================
+# 日志配置
+# ============================================================
+logging:
+  level:
+    root: INFO
+    # AI Agent 核心包 - DEBUG 级别，输出详细日志
+    com.virco.agent: DEBUG
+    # Spring Web - 输出请求/响应调试信息
+    org.springframework.web: DEBUG
+    # Spring JDBC - 输出 SQL 执行日志
+    org.springframework.jdbc: DEBUG
+    # OkHttp - 输出 HTTP 调用日志
+    okhttp3: DEBUG
+    okhttp3.internal.http2: INFO
+  file:
+    name: logs/ai-agent.log
+  logback:
+    rollingpolicy:
+      max-file-size: 50MB
+      max-history: 30
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %highlight(%-5level) %cyan(%logger{36}) - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

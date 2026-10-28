@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spring Boot 练习 · 门户首页</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    body {
+      background: linear-gradient(145deg, #f6f9fc 0%, #eef2f7 100%);
+      font-family: 'Segoe UI', Roboto, system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .hero-section {
+      padding: 2.5rem 1rem 1.5rem;
+      text-align: center;
+    }
+
+    .hero-title {
+      font-weight: 700;
+      color: #1e2b3c;
+      letter-spacing: -0.02em;
+      font-size: 2.8rem;
+    }
+
+    .hero-subtitle {
+      color: #5a6e85;
+      font-size: 1.2rem;
+      font-weight: 400;
+      max-width: 700px;
+      margin: 0.75rem auto 0;
+    }
+
+    .divider-custom {
+      width: 90px;
+      height: 4px;
+      background: #2b7a78;
+      border-radius: 4px;
+      margin: 1.5rem auto 2rem;
+    }
+
+    .portal-card {
+      border: none;
+      border-radius: 1.2rem;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(4px);
+      box-shadow: 0 12px 28px -8px rgba(0, 20, 30, 0.12);
+      transition: transform 0.25s ease, box-shadow 0.3s ease;
+      height: 100%;
+      cursor: pointer;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .portal-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 24px 38px -12px rgba(0, 50, 70, 0.25);
+      background: #ffffff;
+      text-decoration: none;
+    }
+
+    .card-icon {
+      font-size: 2.8rem;
+      color: #2b7a78;
+      margin-bottom: 0.75rem;
+      transition: color 0.2s;
+    }
+
+    .portal-card:hover .card-icon {
+      color: #1f5f5d;
+    }
+
+    .card-title {
+      font-weight: 600;
+      font-size: 1.35rem;
+      color: #1e2b3c;
+      margin-bottom: 0.5rem;
+    }
+
+    .card-desc {
+      color: #4f657b;
+      font-size: 0.95rem;
+      line-height: 1.4;
+      margin-bottom: 0;
+    }
+
+    .footer-note {
+      margin-top: auto;
+      font-size: 0.85rem;
+      color: #8f9eb0;
+      border-top: 1px solid #d9e2ec;
+    }
+
+    /* 加载中的占位提示 */
+    #loading {
+      color: #8f9eb0;
+      font-size: 1rem;
+    }
+
+    @media (max-width: 576px) {
+      .hero-title { font-size: 2rem; }
+      .hero-subtitle { font-size: 1rem; }
+      .card-title { font-size: 1.2rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <main class="container flex-grow-1">
+    <div class="hero-section">
+      <h1 class="hero-title" id="portal-title">
+        <i class="fas fa-leaf me-2" style="color: #2b7a78;"></i>
+        <span id="title-text">加载中...</span>
+      </h1>
+      <p class="hero-subtitle" id="subtitle-text"></p>
+      <div class="divider-custom"></div>
+    </div>
+
+    <!-- 卡片容器：由 JS 动态填充 -->
+    <div class="row g-4 justify-content-center" id="cards-container">
+      <div class="col-12 text-center py-5" id="loading">
+        <i class="fas fa-spinner fa-spin me-2"></i> 正在加载配置...
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer-note text-center py-3 mt-4">
+    <div class="container">
+      <span>Spring Boot Web 练习 · 门户首页 &copy; 2025</span>
+    </div>
+  </footer>
+
+  <script>
+    // 从 JSON 加载配置并渲染
+    async function loadPortalConfig() {
+      try {
+        // 加时间戳避免浏览器缓存配置（调试时可去掉）
+        const response = await fetch('portal-config.json?t=' + Date.now());
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const config = await response.json();
+
+        // 渲染标题 & 副标题
+        document.getElementById('title-text').textContent = config.title || '门户';
+        document.getElementById('subtitle-text').textContent = config.subtitle || '';
+
+        // 渲染卡片
+        const container = document.getElementById('cards-container');
+        container.innerHTML = ''; // 清空 loading
+
+        const cards = config.cards || [];
+        if (cards.length === 0) {
+          container.innerHTML =
+            '<div class="col-12 text-center text-muted py-4">暂无可用模块</div>';
+          return;
+        }
+
+        // 根据卡片数量自适应列宽：<=4 个用 col-lg-3，否则也用 col-lg-3 保持网格整齐
+        cards.forEach(card => {
+          const col = document.createElement('div');
+          col.className = 'col-md-6 col-lg-3';
+
+          const a = document.createElement('a');
+          a.href = card.url || '#';
+          a.className = 'portal-card card h-100 p-4 text-center text-decoration-none';
+
+          // 若需要新窗口打开，可解开下面注释，并在 JSON 加 "target": "_blank"
+          // if (card.target) a.target = card.target;
+
+          const body = document.createElement('div');
+          body.className = 'card-body d-flex flex-column align-items-center justify-content-center';
+
+          // 图标（支持 Font Awesome 类名）
+          const icon = document.createElement('i');
+          // 默认图标，防止 JSON 没写
+          icon.className = (card.icon || 'fas fa-cube') + ' card-icon';
+
+          const title = document.createElement('h5');
+          title.className = 'card-title';
+          title.textContent = card.title || '未命名';
+
+          const desc = document.createElement('p');
+          desc.className = 'card-desc';
+          desc.textContent = card.description || '';
+
+          body.appendChild(icon);
+          body.appendChild(title);
+          body.appendChild(desc);
+          a.appendChild(body);
+          col.appendChild(a);
+          container.appendChild(col);
+        });
+      } catch (err) {
+        console.error('加载门户配置失败:', err);
+        document.getElementById('cards-container').innerHTML =
+          '<div class="col-12 text-center text-danger py-4">' +
+          '<i class="fas fa-exclamation-triangle me-2"></i>' +
+          '配置加载失败，请检查 portal-config.json 是否存在或格式是否正确。' +
+          '</div>';
+        document.getElementById('title-text').textContent = 'Spring Boot 练习';
+      }
+    }
+
+    // 页面加载后执行
+    document.addEventListener('DOMContentLoaded', loadPortalConfig);
+  </script>
+</body>
+</html>
