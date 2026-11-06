@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Redis 状态监控 · 用户管理面板</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+            margin: 0; padding: 24px; background: #f5f7fa; color: #2c3e50;
+        }
+        h1 { font-size: 20px; margin: 0 0 4px; }
+        .meta { font-size: 12px; color: #7f8c8d; margin-bottom: 20px; }
+        .status-badge {
+            display: inline-block; padding: 4px 12px; border-radius: 12px;
+            font-size: 13px; font-weight: 600; margin-left: 8px;
+        }
+        .up { background: #e8f8f0; color: #27ae60; }
+        .down { background: #fdecea; color: #c0392b; }
+        .grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 16px;
+        }
+        .card {
+            background: #fff; border-radius: 8px; padding: 16px 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,.08);
+        }
+        .card h2 {
+            font-size: 14px; margin: 0 0 12px; color: #34495e;
+            border-left: 3px solid #3498db; padding-left: 8px;
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        td { padding: 6px 0; border-bottom: 1px solid #f0f2f5; }
+        td:first-child { color: #7f8c8d; width: 55%; }
+        td:last-child { text-align: right; font-weight: 500; word-break: break-all; }
+        tr:last-child td { border-bottom: none; }
+        .error { color: #c0392b; font-size: 13px; }
+        .refresh { font-size: 12px; color: #95a5a6; margin-top: 20px; text-align: center; }
+
+        /* ---------- 测试按钮区样式 ---------- */
+        .test-panel {
+            background: #fff;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,.08);
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+        }
+        .test-panel .label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #34495e;
+            margin-right: 6px;
+        }
+        .test-btn {
+            background: #ecf0f1;
+            border: none;
+            border-radius: 20px;
+            padding: 6px 16px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            color: #2c3e50;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+        .test-btn:hover {
+            background: #d5dbdb;
+            transform: translateY(-1px);
+        }
+        .test-btn:active {
+            transform: scale(0.97);
+        }
+        .test-btn.primary { background: #3498db; color: #fff; }
+        .test-btn.primary:hover { background: #2980b9; }
+        .test-btn.success { background: #2ecc71; color: #fff; }
+        .test-btn.success:hover { background: #27ae60; }
+        .test-btn.warning { background: #f39c12; color: #fff; }
+        .test-btn.warning:hover { background: #e67e22; }
+        .test-btn.purple { background: #9b59b6; color: #fff; }
+        .test-btn.purple:hover { background: #8e44ad; }
+        .test-btn.gray { background: #95a5a6; color: #fff; }
+        .test-btn.gray:hover { background: #7f8c8d; }
+        .test-btn.danger { background: #e74c3c; color: #fff; }
+        .test-btn.danger:hover { background: #c0392b; }
+        .test-result {
+            flex: 1 1 100%;
+            margin-top: 8px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 10px 14px;
+            font-size: 13px;
+            font-family: "SF Mono", "Consolas", monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+            color: #2c3e50;
+            max-height: 160px;
+            overflow-y: auto;
+            border-left: 3px solid #3498db;
+            display: none;
+        }
+        .test-result.show { display: block; }
+        .test-result .err { color: #c0392b; }
+
+        /* ---------- 用户管理区样式 ---------- */
+        .user-panel {
+            background: #fff;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,.08);
+        }
+        .user-panel .header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+        .user-panel .header h2 {
+            font-size: 15px;
+            margin: 0;
+            color: #34495e;
+            border-left: 3px solid #9b59b6;
+            padding-left: 8px;
+            flex: 1 0 auto;
+        }
+        .user-panel .search-box {
+            display: flex;
+            gap: 6px;
+        }
+        .user-panel .search-box input {
+            padding: 6px 12px;
+            border: 1px solid #dfe6e9;
+            border-radius: 20px;
+            font-size: 13px;
+            outline: none;
+            width: 220px;
+            transition: border-color .15s;
+        }
+        .user-panel .search-box input:focus {
+            border-color: #3498db;
+        }
+        .user-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .user-table th {
+            text-align: left;
+            background: #f8f9fa;
+            padding: 10px 8px;
+            color: #7f8c8d;
+            font-weight: 600;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .user-table td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #f0f2f5;
+            vertical-align: middle;
+        }
+        .user-table tr:hover td {
+            background: #fafbfc;
+        }
+        .user-table .actions {
+            display: flex;
+            gap: 6px;
+        }
+        .btn-sm {
+            padding: 4px 12px;
+            font-size: 12px;
+            border-radius: 14px;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            transition: 0.15s;
+        }
+        .btn-sm.edit { background: #eaf4fc; color: #2980b9; }
+        .btn-sm.edit:hover { background: #d4eafc; }
+        .btn-sm.del { background: #fdecea; color: #c0392b; }
+        .btn-sm.del:hover { background: #fadbd8; }
+        .empty-tip {
+            text-align: center;
+            color: #bdc3c7;
+            padding: 30px 0;
+            font-size: 14px;
+        }
+
+        /* 模态框 */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(44, 62, 80, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal {
+            background: #fff;
+            border-radius: 10px;
+            padding: 24px 28px;
+            width: 380px;
+            max-width: 90vw;
+            box-shadow: 0 10px 40px rgba(0,0,0,.2);
+        }
+        .modal h3 {
+            margin: 0 0 18px;
+            font-size: 16px;
+            color: #2c3e50;
+        }
+        .modal .field {
+            margin-bottom: 14px;
+        }
+        .modal .field label {
+            display: block;
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-bottom: 4px;
+            font-weight: 500;
+        }
+        .modal .field input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #dfe6e9;
+            border-radius: 6px;
+            font-size: 13px;
+            outline: none;
+            transition: border-color .15s;
+        }
+        .modal .field input:focus {
+            border-color: #3498db;
+        }
+        .modal .field input[readonly] {
+            background: #f5f7fa;
+            color: #95a5a6;
+        }
+        .modal .actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 22px;
+        }
+        .modal .actions .btn {
+            padding: 7px 18px;
+            border-radius: 6px;
+            border: none;
+            font-size: 13px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        .modal .actions .cancel {
+            background: #ecf0f1;
+            color: #2c3e50;
+        }
+        .modal .actions .cancel:hover { background: #d5dbdb; }
+        .modal .actions .save {
+            background: #3498db;
+            color: #fff;
+        }
+        .modal .actions .save:hover { background: #2980b9; }
+    </style>
+</head>
+<body>
+    <h1>Redis 状态监控 <span id="badge" class="status-badge">加载中…</span></h1>
+    <div class="meta" id="meta">—</div>
+
+    <!-- ========== 测试按钮面板 ========== -->
+    <div class="test-panel">
+        <span class="label">🧪 接口测试</span>
+        <button class="test-btn primary" data-endpoint="/redis/cache">缓存 cache</button>
+        <button class="test-btn primary" data-endpoint="/redis/hash">哈希 hash</button>
+        <button class="test-btn success" data-endpoint="/redis/queue">队列 queue</button>
+        <button class="test-btn success" data-endpoint="/redis/rank">排行榜 rank</button>
+        <button class="test-btn warning" data-endpoint="/redis/lock">分布式锁 lock</button>
+        <button class="test-btn warning" data-endpoint="/redis/limit">限流 limit</button>
+        <button class="test-btn purple" data-endpoint="/redis/stream">Stream</button>
+        <button class="test-btn purple" data-endpoint="/redis/pubsub">发布订阅 pubsub</button>
+        <button class="test-btn gray" id="clearResult">清空结果</button>
+        <div class="test-result" id="testResult"></div>
+    </div>
+    
+    <div class="grid">
+        <div class="card"><h2>服务器</h2><table id="server"></table></div>
+        <div class="card"><h2>客户端</h2><table id="clients"></table></div>
+        <div class="card"><h2>内存</h2><table id="memory"></table></div>
+        <div class="card"><h2>统计</h2><table id="stats"></table></div>
+        <div class="card"><h2>持久化</h2><table id="persistence"></table></div>
+        <div class="card"><h2>键空间</h2><table id="keyspace"></table></div>
+    </div>
+
+    <!-- ========== 用户管理面板 ========== -->
+    <div class="user-panel">
+        <div class="header">
+            <h2>👤 用户管理（Redis 存储）</h2>
+            <div class="search-box">
+                <input type="text" id="userSearchInput" placeholder="按姓名 / 邮箱 / ID 搜索…" autocomplete="off">
+                <button class="test-btn primary" id="searchUserBtn">查询</button>
+                <button class="test-btn gray" id="refreshUserBtn">刷新</button>
+                <button class="test-btn success" id="randomUserBtn">🎲 随机生成用户</button>
+            </div>
+        </div>
+
+        <div id="userTableContainer">
+            <div class="empty-tip">正在加载用户数据…</div>
+        </div>
+    </div>
+
+    <div class="refresh">每 5 秒自动刷新 · 最后更新：<span id="updated">—</span></div>
+
+    <script>
+        // ============================================================
+        // 一、Redis 监控（原有逻辑）
+        // ============================================================
+        const sections = ['server', 'clients', 'memory', 'stats', 'persistence', 'keyspace'];
+
+        function renderTable(id, obj) {
+            const el = document.getElementById(id);
+            if (!obj || typeof obj !== 'object') { el.innerHTML = '<tr><td>-</td><td>-</td></tr>'; return; }
+            el.innerHTML = Object.entries(obj)
+                .map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`)
+                .join('') || '<tr><td colspan="2">无数据</td></tr>';
+        }
+
+        async function refresh() {
+            const badge = document.getElementById('badge');
+            const meta = document.getElementById('meta');
+            try {
+                const res = await fetch('/api/redis/health', { cache: 'no-store' });
+                const data = await res.json();
+
+                if (data.connected) {
+                    badge.textContent = '已连接';
+                    badge.className = 'status-badge up';
+                } else {
+                    badge.textContent = '不可达';
+                    badge.className = 'status-badge down';
+                }
+
+                const ts = data.timestamp ? new Date(data.timestamp).toLocaleString() : '—';
+                const hitRate = data.hitRate ? ` · 命中率 ${data.hitRate}` : '';
+                const dbSize = data.dbSize !== undefined ? ` · 当前库 keys ${data.dbSize}` : '';
+                meta.textContent = (data.error ? `错误：${data.error}` : `采集时间 ${ts}${hitRate}${dbSize}`);
+
+                sections.forEach(s => renderTable(s, data[s]));
+            } catch (e) {
+                badge.textContent = '请求失败';
+                badge.className = 'status-badge down';
+                meta.textContent = '无法访问 /api/redis/health：' + e.message;
+                sections.forEach(s => renderTable(s, null));
+            }
+            document.getElementById('updated').textContent = new Date().toLocaleTimeString();
+        }
+
+        refresh();
+        setInterval(refresh, 5000);
+
+        // ============================================================
+        // 二、测试按钮（原有逻辑）
+        // ============================================================
+        (function() {
+            const resultBox = document.getElementById('testResult');
+            const clearBtn = document.getElementById('clearResult');
+
+            clearBtn.addEventListener('click', function() {
+                resultBox.textContent = '';
+                resultBox.classList.remove('show');
+            });
+
+            document.querySelectorAll('.test-btn[data-endpoint]').forEach(btn => {
+                btn.addEventListener('click', async function() {
+                    const endpoint = this.dataset.endpoint;
+                    const originalText = this.textContent;
+                    if (this.disabled) return;
+                    this.disabled = true;
+                    this.textContent = '请求中…';
+
+                    resultBox.classList.add('show');
+                    resultBox.innerHTML = `<span style="color:#7f8c8d;">→ 正在请求 GET ${endpoint} …</span>`;
+
+                    try {
+                        const res = await fetch(endpoint, { cache: 'no-store' });
+                        const contentType = res.headers.get('content-type') || '';
+                        let resultText;
+                        if (contentType.includes('application/json')) {
+                            resultText = JSON.stringify(await res.json(), null, 2);
+                        } else {
+                            resultText = await res.text();
+                        }
+                        const statusLabel = res.ok
+                            ? `✅ ${res.status} ${res.statusText}`
+                            : `⚠️ ${res.status} ${res.statusText}`;
+                        const escaped = resultText
+                            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        resultBox.innerHTML = `<span style="color:#27ae60;font-weight:600;">${statusLabel}</span>  <span style="color:#7f8c8d;">${endpoint}</span>\n` +
+                            `<span style="color:#2c3e50;">${escaped}</span>`;
+                    } catch (err) {
+                        resultBox.innerHTML = `<span class="err">❌ 请求失败：${err.message}</span>\n` +
+                            `<span style="color:#7f8c8d;">端点：${endpoint}</span>`;
+                    } finally {
+                        this.disabled = false;
+                        this.textContent = originalText;
+                    }
+                });
+            });
+        })();
+
+        // ============================================================
+        // 三、用户管理模块
+        // ============================================================
+        (function() {
+            const container = document.getElementById('userTableContainer');
+            const searchInput = document.getElementById('userSearchInput');
+            const searchBtn = document.getElementById('searchUserBtn');
+            const refreshBtn = document.getElementById('refreshUserBtn');
+            const randomBtn = document.getElementById('randomUserBtn');
+
+            // 全局缓存当前用户数据，便于编辑
+            let currentUsers = [];
+
+            // ---------- 工具：HTML 转义 ----------
+            function escapeHtml(str) {
+                if (str === null || str === undefined) return '';
+                return String(str)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            // ---------- 渲染用户表格 ----------
+            function renderUsers(users) {
+                currentUsers = users || [];
+                if (!users || users.length === 0) {
+                    container.innerHTML = '<div class="empty-tip">暂无用户数据，点击「随机生成用户」或「刷新」试试</div>';
+                    return;
+                }
+
+                const table = document.createElement('table');
+                table.className = 'user-table';
+                table.innerHTML = `
+                    <thead>
+                        <tr>
+                            <th style="width:18%">ID</th>
+                            <th style="width:20%">姓名</th>
+                            <th style="width:32%">邮箱</th>
+                            <th style="width:10%">年龄</th>
+                            <th style="width:20%">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                `;
+                const tbody = table.querySelector('tbody');
+
+                users.forEach(user => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td><code style="font-size:12px;color:#7f8c8d;">${escapeHtml(user.id)}</code></td>
+                        <td><strong>${escapeHtml(user.name)}</strong></td>
+                        <td>${escapeHtml(user.email)}</td>
+                        <td>${user.age ?? '—'}</td>
+                        <td>
+                            <div class="actions">
+                                <button class="btn-sm edit" data-action="edit" data-id="${escapeHtml(user.id)}">✏️ 修改</button>
+                                <button class="btn-sm del" data-action="delete" data-id="${escapeHtml(user.id)}">🗑️ 删除</button>
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                container.innerHTML = '';
+                container.appendChild(table);
+
+                // 绑定修改 / 删除事件
+                container.querySelectorAll('[data-action="edit"]').forEach(btn => {
+                    btn.addEventListener('click', () => openEditModal(btn.dataset.id));
+                });
+                container.querySelectorAll('[data-action="delete"]').forEach(btn => {
+                    btn.addEventListener('click', () => deleteUser(btn.dataset.id));
+                });
+            }
+
+            // ---------- 加载用户列表 ----------
+            async function loadUsers(keyword = '') {
+                const url = keyword
+                    ? `/redis/users?keyword=${encodeURIComponent(keyword)}`
+                    : '/redis/users';
+                container.innerHTML = '<div class="empty-tip">正在加载用户数据…</div>';
+                try {
+                    const res = await fetch(url, { cache: 'no-store' });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    const data = await res.json();
+                    // 后端可能返回数组，也可能返回 {data: [...]}，做兼容
+                    const users = Array.isArray(data) ? data : (data.data || []);
+                    renderUsers(users);
+                } catch (err) {
+                    container.innerHTML = `<div class="empty-tip" style="color:#c0392b;">加载失败：${escapeHtml(err.message)}</div>`;
+                }
+            }
+
+            // ---------- 查询按钮 ----------
+            searchBtn.addEventListener('click', () => {
+                loadUsers(searchInput.value.trim());
+            });
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') searchBtn.click();
+            });
+
+            // ---------- 刷新按钮 ----------
+            refreshBtn.addEventListener('click', () => {
+                searchInput.value = '';
+                loadUsers();
+            });
+
+            // ---------- 随机生成用户 ----------
+            randomBtn.addEventListener('click', async function() {
+                const originalText = this.textContent;
+                this.disabled = true;
+                this.textContent = '生成中…';
+                try {
+                    const res = await fetch('/redis/create-users', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    const result = await res.json();
+                    // 生成成功后刷新列表
+                    await loadUsers(searchInput.value.trim());
+                } catch (err) {
+                    container.innerHTML = `<div class="empty-tip" style="color:#c0392b;">生成失败：${escapeHtml(err.message)}</div>`;
+                } finally {
+                    this.disabled = false;
+                    this.textContent = originalText;
+                }
+            });
+
+            // ---------- 删除用户 ----------
+            async function deleteUser(id) {
+                if (!confirm(`确定要删除用户 ${id} 吗？`)) return;
+                try {
+                    const res = await fetch(`/redis/users/${encodeURIComponent(id)}`, {
+                        method: 'DELETE'
+                    });
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    await loadUsers(searchInput.value.trim());
+                } catch (err) {
+                    alert('删除失败：' + err.message);
+                }
+            }
+
+            // ---------- 修改用户（模态框） ----------
+            function openEditModal(userId) {
+                const user = currentUsers.find(u => u.id === userId);
+                if (!user) return;
+
+                // 构建模态框
+                const overlay = document.createElement('div');
+                overlay.className = 'modal-overlay';
+                overlay.innerHTML = `
+                    <div class="modal">
+                        <h3>✏️ 修改用户信息</h3>
+                        <div class="field">
+                            <label>用户 ID（只读）</label>
+                            <input type="text" id="editUserId" value="${escapeHtml(user.id)}" readonly>
+                        </div>
+                        <div class="field">
+                            <label>姓名</label>
+                            <input type="text" id="editUserName" value="${escapeHtml(user.name)}">
+                        </div>
+                        <div class="field">
+                            <label>邮箱</label>
+                            <input type="email" id="editUserEmail" value="${escapeHtml(user.email)}">
+                        </div>
+                        <div class="field">
+                            <label>年龄</label>
+                            <input type="number" id="editUserAge" value="${user.age ?? ''}" min="0" max="150">
+                        </div>
+                        <div class="actions">
+                            <button class="cancel" id="modalCancel">取消</button>
+                            <button class="save" id="modalSave">保存</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(overlay);
+
+                const close = () => overlay.remove();
+                overlay.querySelector('#modalCancel').addEventListener('click', close);
+                overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+                overlay.querySelector('#modalSave').addEventListener('click', async () => {
+                    const name = overlay.querySelector('#editUserName').value.trim();
+                    const email = overlay.querySelector('#editUserEmail').value.trim();
+                    const ageVal = overlay.querySelector('#editUserAge').value.trim();
+
+                    if (!name) { alert('姓名不能为空'); return; }
+                    if (!email) { alert('邮箱不能为空'); return; }
+
+                    const payload = {
+                        name,
+                        email,
+                        age: ageVal === '' ? null : Number(ageVal)
+                    };
+
+                    try {
+                        const res = await fetch(`/redis/users/${encodeURIComponent(userId)}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                        close();
+                        await loadUsers(searchInput.value.trim());
+                    } catch (err) {
+                        alert('修改失败：' + err.message);
+                    }
+                });
+            }
+
+            // ---------- 初始加载 ----------
+            loadUsers();
+        })();
+    </script>
+</body>
+</html>

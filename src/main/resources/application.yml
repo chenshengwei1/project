@@ -29,6 +29,17 @@ spring:
       schema-locations: classpath:schema.sql
       mode: always
       continue-on-error: true
+  redis:
+    host: 127.0.0.1
+    port: 6379
+    password:
+    database: 0
+    lettuce:
+      pool:
+        max-active: 20
+        max-idle: 10
+        min-idle: 2
+        max-wait: 3s
 
   # ============================================================
   # Jackson JSON 配置
@@ -100,8 +111,8 @@ ai:
       heartbeat-ms: 15000
       cancel-on-disconnect: true
     tool:
-      timeout-ms: 10000
-      result-max-bytes: 8192
+      timeout-ms: 100000
+      result-max-bytes: 81920
       pool-size: 4
       pool-queue-size: 32
     session:
@@ -119,6 +130,8 @@ ai:
       command-allowlist: []      # 空=不限制（本地个人场景）；可配 ["ls","cat","grep","pwd","echo"]
       command-timeout-ms: 10000
       file-max-bytes: 1048576
+      image-api-key: sk-vXRn1UP26oqmhHbo8JyoAYm8zP0M3qFUTHJCYTPZLcK5W26a
+      image-base-endpoint: https://apihub.agnes-ai.com/v1/images/generations
 chat:
   auth:
     token: test-token
@@ -140,7 +153,7 @@ chat:
     defaults:
       temperature: 0.7
       top-p: 0.9
-      max-tokens: 4096
+      max-tokens: 40960
       chat-template-kwargs:
         enable_thinking: true
     providers:
@@ -164,14 +177,7 @@ chat:
             supports-vision: false
       deepseek:
         base-url: https://api.deepseek.com/v1
-        api-key: sk-deepseek-xxxx
-        models:
-          - id: deepseek-chat
-            name: DeepSeek Chat
-            supports-deep-think: true
-          - id: deepseek-reasoner
-            name: DeepSeek Reasoner
-            supports-deep-think: true
+        api-key: sk-571f52c457c3479992cc2048f7f54e46
       agentai:
         base-url: https://apihub.agnes-ai.com/v1
         api-key: sk-vXRn1UP26oqmhHbo8JyoAYm8zP0M3qFUTHJCYTPZLcK5W26a
@@ -179,9 +185,28 @@ chat:
           - id: agnes-2.5-flash
             name: agnes-2.5-flash
             supports-deep-think: true
-        image-models:
-          - id: agnes-2.5-flash
-            name: agnes-2.5-flash
+            supports-video: true
+            supports-image: true
+            supports-voice: true
+      silicomflow:
+        base-url: https://api.siliconflow.cn/v1
+        audio-url: /audio/transcriptions
+        api-key: sk-vnlizsmuipcuwmavgdcpfjnfxymctglihunfwnfeaaqrnuve
+        models:
+          - id: Pro/deepseek-ai/DeepSeek-R1
+            name: Pro/deepseek-ai/DeepSeek-R1
+            supports-deep-think: true
+          - id: Kwai-Kolors/Kolors
+            name: Kwai-Kolors/Kolors
+            supports-deep-think: true
+            supports-image: true
+          - id: XingChenAGI/XingChenASR-V3.2-Ultra
+            name: Kwai-Kolors/Kolors
+            supports-deep-think: true
+            supports-video: false
+      qiniu: 
+        base-url: https://api.qnaigc.com/v1
+        api-key: sk-1dbf6cdb65e9f974424db2960b8f68233aecef2f1d45d720ea06808f734297e5
 
 # ============================================================
 # Actuator 配置

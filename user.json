@@ -1,0 +1,16 @@
+[ {
+  "id" : "u1001",
+  "name" : "张伟",
+  "email" : "zhangwei@example.com",
+  "age" : 28
+}, {
+  "id" : "u1002",
+  "name" : "李娜",
+  "email" : "lina@example.com",
+  "age" : 32
+}, {
+  "id" : "u1003",
+  "name" : "王强",
+  "email" : "wangqiang@example.com",
+  "age" : 25
+} ]

@@ -13,8 +13,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.StringReader;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -105,9 +107,31 @@ public interface LlmClient {
             HttpResponse<InputStream> resp = http.send(req, HttpResponse.BodyHandlers.ofInputStream());
             if (resp.statusCode() / 100 != 2) {
                 String err = new String(resp.body().readAllBytes(), StandardCharsets.UTF_8);
-                throw new RuntimeException("LLM HTTP " + resp.statusCode() + ": " + err);
+                String friendly = "LLM HTTP " + resp.statusCode() + ": " + truncate(err, 2000);
+                String sse = errorAsSse(friendly);
+                return new SseLlmStream(
+                        new ByteArrayInputStream(sse.getBytes(StandardCharsets.UTF_8)), om);
             }
             return new SseLlmStream(resp.body(), om);
+        }
+
+        private String truncate(String err, int length){
+            return err;
+        }
+
+        private String errorAsSse(String message) throws Exception {
+            ObjectNode chunk = om.createObjectNode();
+            chunk.put("object", "chat.completion.chunk");
+            ArrayNode choices = chunk.putArray("choices");
+            ObjectNode c = choices.addObject();
+            c.put("index", 0);
+            c.putObject("delta").put("content", message);
+            c.putNull("finish_reason");
+
+            // data 行内容必须是单行；JSON 序列化会把 \n 转义成 \\n，天然满足 SSE 要求
+            String data = "data: " + om.writeValueAsString(chunk) + "\n\n";
+            String done = "data: [DONE]\n\n";
+            return data + done;
         }
 
         private void applyParams(ObjectNode body, GenerationParams params) {

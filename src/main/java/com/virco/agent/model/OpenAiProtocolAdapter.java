@@ -24,12 +24,13 @@ public class OpenAiProtocolAdapter {
     private final ObjectMapper om;
 
     public String buildRequestBody(LlmProvider p, List<ChatMessage> messages,
-                                   List<ToolSchema> tools, double temperature, int maxTokens) {
+                                   List<ToolSchema> tools, double temperature, int maxTokens, boolean thinking) {
         ObjectNode body = om.createObjectNode();
         body.put("model", p.modelId());
         body.put("temperature", temperature);
         body.put("max_tokens", maxTokens);
         body.put("stream", false);
+        body.put("thinking", thinking);
         body.set("messages", toMessages(messages));
         if (tools != null && !tools.isEmpty()) {
             ArrayNode arr = body.putArray("tools");
@@ -46,11 +47,11 @@ public class OpenAiProtocolAdapter {
     }
 
     public String buildStreamBody(LlmProvider p, List<ChatMessage> messages,
-                                  List<ToolSchema> tools, double temperature, int maxTokens) {
+                                  List<ToolSchema> tools, double temperature, int maxTokens, boolean  thinking) {
         ObjectNode body = null;
         try {
             body = (ObjectNode) om.readTree(
-                buildRequestBody(p, messages, tools, temperature, maxTokens));
+                buildRequestBody(p, messages, tools, temperature, maxTokens, thinking));
         } catch (JsonProcessingException e) {
             // TODO Auto-generated catch block
             e.printStackTrace();

@@ -3,7 +3,6 @@ package com.virco.agent.model;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import javax.swing.plaf.nimbus.State;
 
 import org.springframework.stereotype.Component;
 

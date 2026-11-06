@@ -9,12 +9,16 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-@RestController @RequestMapping("/agent/diag")
-@ConditionalOnProperty(prefix = "agent.diag", name = "expose-endpoints", havingValue = "true")
+import lombok.RequiredArgsConstructor;
+
+@RestController 
+@RequestMapping("/agent/diag")
+@RequiredArgsConstructor 
+@ConditionalOnProperty(prefix = "ai.agent.diag", name = "expose-endpoints", havingValue = "true")
 public class DiagController {
     private final TraceBuffer buffer;
-    public DiagController(TraceBuffer b) { this.buffer = b; }
-    @GetMapping("/recent") public List<Map<String, Object>> recent(@RequestParam(defaultValue = "20") int n) {
+    @GetMapping("/recent") 
+    public List<Map<String, Object>> recent(@RequestParam(defaultValue = "20") int n) {
         return buffer.recent(n);
     }
 }

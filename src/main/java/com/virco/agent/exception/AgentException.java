@@ -1,4 +1,4 @@
-package com.virco.agent.service;
+package com.virco.agent.exception;
 
 public class AgentException extends RuntimeException {
     private final String code, userMessage;

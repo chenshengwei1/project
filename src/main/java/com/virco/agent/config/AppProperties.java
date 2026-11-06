@@ -66,6 +66,9 @@ public class AppProperties {
     @Data
     public static class Provider {
         private String baseUrl;
+        private String audioUrl;
+        private String imageUrl;
+        private String vedioUrl;
         @ToString.Exclude
         private String apiKey;
         /** provider 级覆盖；null 表示完全沿用 defaults */
@@ -95,6 +98,9 @@ public class AppProperties {
         private boolean supportsVision;
         /** 该模型专属参数；null 表示沿用 provider / defaults */
         private GenerationParams params;
+        private boolean supportsVideo = false;
+        private boolean supportsImage = false;;
+        private boolean supportsVoice = false;;
     }
 
     /** 生成参数；每个字段 null 表示"未配置，沿用下层" */

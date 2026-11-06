@@ -1,18 +1,23 @@
 package com.virco.agent.model;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 import org.springframework.stereotype.Component;
 
 import com.virco.agent.config.AgentProperties;
 import com.virco.agent.config.ChatLlmProperties;
+import com.virco.agent.config.ChatLlmProperties.ModelDef;
+import com.virco.agent.config.ChatLlmProperties.Provider;
 
 @Component
 public class ModelResolver {
-    private final ChatLlmProperties chat;
+    private final ModelRegistry chat;
     private final AgentProperties agent;
-    public ModelResolver(ChatLlmProperties chat, AgentProperties agent) {
+    public ModelResolver(ModelRegistry chat, AgentProperties agent) {
         this.chat = chat; this.agent = agent;
     }
 
@@ -23,9 +28,26 @@ public class ModelResolver {
         if (agent.backups() != null) agent.backups().forEach(b -> addRef(list, b));
         if (list.isEmpty()) {
             // 没配 primary 时退回 chat.llm.default-model，在 providers 里找
-            addByModelId(list, chat.defaultModel());
+            addByModelId(list, chat.defaultId());
         }
         return list;
+    }
+
+    public List<ModelDef> models(){
+        Map<String, ModelDef> modelMap = new HashMap<>();
+        for (Provider m: this.chat.providers().values()){
+            for (ModelDef md: m.models()){
+                modelMap.put(md.name(), md);
+            }
+        }
+        return List.copyOf(modelMap.values());
+    }
+
+    public List<ModelDef> models(String provider){
+        return Optional.ofNullable(this.chat.providers().get(provider))
+        .map(Provider::models)
+        .map(List::copyOf)
+        .orElseGet(List::of);
     }
 
     private void addRef(List<LlmProvider> list, String ref) {

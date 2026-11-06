@@ -4,9 +4,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.virco.agent.entity.ChatDTO;
 
+import jakarta.annotation.PostConstruct;
 
 import com.virco.agent.config.AppProperties;
 import com.virco.agent.config.AppProperties.GenerationParams;
+import com.virco.agent.config.ChatLlmProperties.ModelDef;
+import com.virco.agent.config.ChatLlmProperties.Provider;
 import com.virco.agent.config.GenerationParamsMerger;
 
 import org.slf4j.Logger;
@@ -41,9 +44,49 @@ public class ModelRegistry {
                 .build();
     }
 
+    @PostConstruct 
+    public void init(){
+        this.refresh();
+    }
+
     // ---------- 对外 API ----------
 
     public List<ChatDTO.ModelInfo> list() { return snapshot().items(); }
+
+
+    public Map<String, Provider> providers() {
+        return this.props.getLlm().getProviders().entrySet().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> toProvider(e.getKey(), e.getValue())
+                ));
+    }
+
+    private Provider toProvider(String pName, AppProperties.Provider p) {
+        return new Provider(
+                p.getBaseUrl(),
+                p.getApiKey(),
+                toModelDefs(snapshot().items().stream().filter(m -> m.provider() == pName).toList()),
+                List.of()
+        );
+    }
+
+    private List<ModelDef> toModelDefs(List<ChatDTO.ModelInfo> models) {
+        if (models == null) {
+            return List.of();
+        }
+        return models.stream()
+                .map(m -> new ModelDef(
+                        m.id(),
+                        m.name(),
+                        m.description(),
+                        m.contextWindow(),
+                        m.supportsDeepThink(),
+                        m.supportsWebSearch(),
+                        m.supportsVision()
+                ))
+                .toList();
+    }
 
     public String defaultId() { return snapshot().defaultId(); }
 
@@ -88,7 +131,7 @@ public class ModelRegistry {
         Map<String, ChatDTO.MediaModelInfo> staticMetaMedia = new HashMap<>();
         props.getLlm().getProviders().forEach((pName, p) -> {
             for (AppProperties.Model m : p.getModels()) {
-                staticMeta.put(m.getId(), toInfo(m));
+                staticMeta.put(m.getId(), toInfo(pName, m));
                 staticMetaMedia.put(m.getId(), toMediaInfo(m));
             }
         });
@@ -139,7 +182,7 @@ public class ModelRegistry {
                     continue;
                 }
                 ChatDTO.ModelInfo info = staticMeta.getOrDefault(id,
-                        new ChatDTO.ModelInfo(id, id, null, null, false, false, false));
+                        new ChatDTO.ModelInfo(pName, id, id, null, null, false, false, false));
                 all.add(info);
                 byId.put(id, info);
                 modelToProvider.put(id, pName);
@@ -237,8 +280,8 @@ public class ModelRegistry {
         return out;
     }
 
-    private ChatDTO.ModelInfo toInfo(AppProperties.Model m) {
-        return new ChatDTO.ModelInfo(m.getId(), m.getName(), m.getDescription(),
+    private ChatDTO.ModelInfo toInfo(String provider, AppProperties.Model m) {
+        return new ChatDTO.ModelInfo(provider, m.getId(), m.getName(), m.getDescription(),
                 m.getContextWindow(), m.isSupportsDeepThink(),
                 m.isSupportsWebSearch(), m.isSupportsVision());
     }

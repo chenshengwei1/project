@@ -2,6 +2,9 @@ package com.virco.agent.model;
 
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record ChatMessage(String role, String content,
                           List<InternalToolCall> toolCalls, String toolCallId) {
     public static ChatMessage system(String c) { return new ChatMessage("system", c, null, null); }

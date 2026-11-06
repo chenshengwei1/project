@@ -7,16 +7,16 @@ import org.springframework.stereotype.Service;
 
 import com.virco.agent.config.AgentProperties;
 import com.virco.agent.dialog.AgentMetrics;
+import com.virco.agent.exception.AgentException;
+import com.virco.agent.exception.ApiException;
 import com.virco.agent.model.ChatMessage;
 import com.virco.agent.model.ChatResponse;
 import com.virco.agent.model.InternalToolCall;
 import com.virco.agent.model.ALlmClient;
 import com.virco.agent.model.LlmRouter;
-import com.virco.agent.model.LlmRouter.AllProvidersUnavailableException;
 import com.virco.agent.react.Event.EventSink;
 import com.virco.agent.react.interceptor.AgentInterceptor;
 import com.virco.agent.react.interceptor.LlmInterceptor;
-import com.virco.agent.service.AgentException;
 import com.virco.agent.tools.ToolRegistry;
 
 import lombok.RequiredArgsConstructor;
@@ -39,7 +39,9 @@ public class ReActAgent {
 
     public String run(String sessionId, String userInput, EventSink sink) {
         List<ChatMessage> messages = sessionStore.load(sessionId);
-        messages.add(ChatMessage.system(systemPrompt()));
+        if (!messages.stream().anyMatch(u -> u.role() == "system")){
+            messages.add(ChatMessage.system(systemPrompt()));
+        }
         messages.add(ChatMessage.user(userInput));
         AgentContext ctx = new AgentContext(sessionId, userInput, messages);
         long deadline = System.currentTimeMillis() + agent.react().maxDurationMs();
@@ -49,6 +51,7 @@ public class ReActAgent {
         
         try {
             log.info(MessageFormat.format("\n===============agent [START size={0}]======================", messages.size()));
+            
             fireAgentBefore(ctx);
             String answer = null;
             for (int step = 0; step < agent.react().maxSteps(); step++) {
@@ -82,8 +85,10 @@ public class ReActAgent {
                                 if (sink != null) sink.emit(new Event.ToolStart(tc.name(), tc.argumentsJson()));
                                 long t0 = System.currentTimeMillis();
                                 result = tools.execute(tc.name(), tc.argumentsJson());
+                                metrics.toolSuccess(result);
                                 if (sink != null) sink.emit(new Event.ToolDone(tc.name(), System.currentTimeMillis() - t0, abbreviate(result, 200)));
                             } catch (Exception e) {
+                                metrics.toolFail(e.getMessage());
                                 result = e.getMessage();
                             }
                         }
@@ -93,8 +98,9 @@ public class ReActAgent {
                     if (answer != null) break;
                 } else {
                     answer = resp.content();
+                    metrics.llmSuccess(answer, deadline - System.currentTimeMillis());
                     messages.add(ChatMessage.assistant(answer, null));
-                    log.debug("\n===============agent[\"+messages.size()+\"] LLM answer======================\n'''"+answer+"\n'''");
+                    log.debug("\n===============agent["+messages.size()+"] LLM answer======================\n'''"+answer+"\n'''");
                     break;
                 }
             }
@@ -103,10 +109,11 @@ public class ReActAgent {
                 log.debug(MessageFormat.format("\n===============agent [达到最大步数{0}]======================", agent.react().maxSteps()));
             }
             log.debug(MessageFormat.format("\n===============agent [END size={0}]======================", messages.size()));
+            metrics.llmSuccess(answer, deadline - System.currentTimeMillis());
             sessionStore.save(sessionId, trim(messages));
             fireAgentAfter(ctx, answer);
             return answer;
-        } catch (AllProvidersUnavailableException e) {
+        } catch (ApiException.AllProvidersUnavailableException e) {
             fireAgentError(ctx, e);
             throw new AgentException("ALL_PROVIDERS_DOWN", "模型服务暂不可用，请稍后重试", e);
         } catch (Exception e) {

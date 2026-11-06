@@ -71,7 +71,7 @@ interface MediaTaskRepository {
 
 // ==================== JSON 存储基座 ====================
 
-class JsonStore {
+class JsonStore{
 
     private final Path file;
     private final ObjectMapper om;

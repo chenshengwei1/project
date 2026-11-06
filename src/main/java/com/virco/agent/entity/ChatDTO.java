@@ -2,12 +2,16 @@ package com.virco.agent.entity;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 import java.util.List;
@@ -35,6 +39,33 @@ public final class ChatDTO {
     public record LoginRequest(@NotBlank String username, @NotBlank String password) {}
     public record LoginResponse(String accessToken, String userId, String name) {}
 
+    @Data
+    @AllArgsConstructor 
+    @NoArgsConstructor 
+    public static class User {
+        private String id;
+        private String name;
+        private String email;
+        private Integer age;
+        private String passwordHash;
+    }
+
+    @Data
+    @AllArgsConstructor 
+    @NoArgsConstructor 
+    public static class UserRequest {
+        private String id;
+        @NotBlank(message = "姓名不能为空")
+        private String name;
+
+        @NotBlank(message = "邮箱不能为空")
+        @Email(message = "邮箱格式不正确")
+        private String email;
+
+        @Min(value = 0, message = "年龄不能小于0")
+        private Integer age;
+    }
+
     /** GET /me 的响应 */
     public record MeResponse(
             String id,
@@ -49,6 +80,7 @@ public final class ChatDTO {
      * 若后端实际字段不同，直接调整本 record 即可。
      */
     public record ModelInfo(
+            String provider,
             String id,
             String name,
             String description,

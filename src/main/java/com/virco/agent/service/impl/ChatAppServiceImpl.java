@@ -209,6 +209,7 @@ public class ChatAppServiceImpl implements ChatAppService {
 
         SseEmitter emitter = new SseEmitter(0L);
         AtomicBoolean completedNormally = new AtomicBoolean(false);
+        AtomicBoolean terminated = new AtomicBoolean(false);      // 语义改为「已进入终态」
         AtomicReference<Future<?>> upstreamRef = new AtomicReference<>();
         AtomicReference<String> assistantMsgIdRef = new AtomicReference<>();
         AtomicReference<StringBuilder> bufferRef = new AtomicReference<>(new StringBuilder());
@@ -219,29 +220,45 @@ public class ChatAppServiceImpl implements ChatAppService {
         Runnable onAbort = () -> {
             hb.cancel(true);
             cancelUpstream(upstreamRef);
-            if (!completedNormally.get() && assistantMsgIdRef.get() != null) {
-                try {
-                    msgRepo.finalizeAssistantMessage(assistantMsgIdRef.get(),
-                            bufferRef.get().toString(), "interrupted", null);
-                } catch (Exception e) { log.warn("mark interrupted failed: {}", e.getMessage()); }
-            }
+            terminate(emitter, terminated, assistantMsgIdRef.get(), bufferRef.get(),
+              "interrupted", null, null, null);          // 不发事件（发也发不出去）
         };
         emitter.onCompletion(onAbort);
         emitter.onError(t -> { log.debug("SSE error: {}", t.getMessage()); onAbort.run(); });
         emitter.onTimeout(() -> { log.debug("SSE timeout"); onAbort.run(); });
 
         upstreamRef.set(sseExecutor.submit(() ->
-                runStream(u, conv, req, emitter, completedNormally, assistantMsgIdRef, bufferRef, regenerate)));
+                runStream(u, conv, req, emitter, terminated, assistantMsgIdRef, bufferRef, regenerate)));
         return emitter;
     }
 
+    private void terminate(SseEmitter emitter, AtomicBoolean terminated, String assistantMsgId,
+                       StringBuilder buffer, String status, String errMsg,
+                       TokenUsage usage, Runnable finalEvent) {
+        if (!terminated.compareAndSet(false, true)) return;   // 幂等：任意路径只跑一次
+
+        // ① 发最后一帧事件（Done 或 Error），客户端断了就静默丢弃
+        if (finalEvent != null) {
+            try { finalEvent.run(); }
+            catch (Exception e) { log.debug("final event dropped: {}", e.getMessage()); }
+        }
+        // ② 落库（客户端断没断都要落，避免 DB 卡在 streaming）
+        if (assistantMsgId != null) {
+            try { msgRepo.finalizeAssistantMessage(assistantMsgId, buffer.toString(), status, usage); }
+            catch (Exception e) { log.warn("finalize failed: {}", e.getMessage()); }
+        }
+        // ③ 关闭 SSE，让前端 EventSource 拿到 onclose
+        try { emitter.complete(); } catch (Exception ignore) {}
+    }
+
     private void runStream(AuthSupport.User u, Conversation conv, ChatCompletionRequest req,
-                           SseEmitter emitter, AtomicBoolean completedNormally,
+                           SseEmitter emitter, AtomicBoolean terminated,
                            AtomicReference<String> assistantMsgIdRef,
                            AtomicReference<StringBuilder> bufferRef, boolean regenerate) {
         StringBuilder buffer = bufferRef.get();
         String assistantMsgId = null;
         LlmClient.LlmStream stream = null;
+        TokenUsage usage = null;
         try {
             if (regenerate) {
                 msgRepo.updateAndTruncateAfter(req.regenerateMessageId(), "", List.of());
@@ -266,7 +283,7 @@ public class ChatAppServiceImpl implements ChatAppService {
                     Boolean.TRUE.equals(req.deepThink()), Boolean.TRUE.equals(req.webSearch()),
                     req.regenerateMessageId());
 
-            TokenUsage usage = null;
+            
             for (LlmClient.Chunk chunk : stream) {
                 switch (chunk.type()) {
                     case REASONING -> send(emitter, new ReasoningEvent(chunk.content()));
@@ -281,24 +298,38 @@ public class ChatAppServiceImpl implements ChatAppService {
 
             Message finalMsg = msgRepo.finalizeAssistantMessage(assistantMsgId, buffer.toString(), "normal", usage);
             convRepo.bumpUpdatedAt(conv.id(), msgRepo.listAllByConversation(conv.id()).size());
-            send(emitter, new DoneEvent(finalMsg));
-            completedNormally.set(true);
-            emitter.complete();
-        } catch (IOException | IllegalStateException gone) {
-            log.debug("client disconnected: {}", gone.getMessage());
-        } catch (Exception e) {
+            assistantMsgIdRef.set(null);                     // 已落库，onAbort 不再处理
+            terminate(emitter, terminated, null, buffer, "normal", null, usage,
+                    () -> safeSend(emitter, new DoneEvent(finalMsg)));
+        }catch (Exception e) {
             log.warn("stream failed", e);
-            safeSend(emitter, new ErrorEvent("INTERNAL_ERROR",
-                    e.getMessage() == null ? "internal error" : e.getMessage(), Map.of()));
-            if (assistantMsgId != null) {
-                try { msgRepo.finalizeAssistantMessage(assistantMsgId, buffer.toString(), "error", null); }
-                catch (Exception ignore) {}
-            }
-            completedNormally.set(true);
-            try { emitter.completeWithError(e); } catch (Exception ignore) {}
+            String code = classifyError(e);
+            String msg  = friendlyMessage(e);
+            String id   = assistantMsgId;
+            TokenUsage uu = usage;
+            terminate(emitter, terminated, id, buffer, "error", msg, uu,
+                    () -> safeSend(emitter, new ErrorEvent(code, msg, Map.of())));
         } finally {
-            if (stream != null) stream.close();
+            if (stream != null) try { stream.close(); } catch (Exception ignore) {}
         }
+    }
+
+    private String classifyError(Throwable e) {
+        if (e instanceof java.net.http.HttpConnectTimeoutException) return "UPSTREAM_CONNECT_TIMEOUT";
+        if (e instanceof java.net.http.HttpTimeoutException)        return "UPSTREAM_TIMEOUT";
+        if (e instanceof java.util.concurrent.TimeoutException)     return "UPSTREAM_TIMEOUT";
+        if (e instanceof java.io.IOException)                       return "UPSTREAM_IO_ERROR";
+        return "INTERNAL_ERROR";
+    }
+
+    private String friendlyMessage(Throwable e) {
+        if (e instanceof java.net.http.HttpConnectTimeoutException) return "连接模型服务超时，请稍后重试";
+        if (e instanceof java.net.http.HttpTimeoutException)        return "模型服务响应超时，请稍后重试";
+        if (e instanceof java.io.IOException) {
+            String m = e.getMessage();
+            return "模型服务网络异常" + (m != null ? "：" + m : "");
+        }
+        return e.getMessage() == null ? "服务内部错误" : e.getMessage();
     }
 
     // ---------- 文件 ----------

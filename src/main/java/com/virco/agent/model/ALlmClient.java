@@ -33,12 +33,11 @@ public class ALlmClient {
     private final ObjectMapper om;
     private final OpenAiProtocolAdapter adapter;
     private final AgentProperties agent;
-    private final ChatLlmProperties chat;
     private final AgentMetrics metrics;
 
     public ALlmClient(ObjectMapper om, OpenAiProtocolAdapter adapter,
-                     AgentProperties agent, ChatLlmProperties chat, AgentMetrics metrics) {
-        this.om = om; this.adapter = adapter; this.agent = agent; this.chat = chat;
+                     AgentProperties agent, AgentMetrics metrics) {
+        this.om = om; this.adapter = adapter; this.agent = agent;
         this.metrics = metrics;
         var t = agent.timeouts();
         this.http = new OkHttpClient.Builder()
@@ -52,7 +51,7 @@ public class ALlmClient {
     public ChatResponse chat(LlmProvider p, List<ChatMessage> messages,
                              List<ToolSchema> tools, double temperature, int maxTokens)
             throws IOException {
-        String body = adapter.buildRequestBody(p, messages, tools, temperature, maxTokens);
+        String body = adapter.buildRequestBody(p, messages, tools, temperature, maxTokens, true);
         long t0 = System.nanoTime();
         Request req = new Request.Builder()
             .url(p.baseUrl().replaceAll("/$", "") + "/chat/completions")
@@ -84,9 +83,9 @@ public class ALlmClient {
 
     /** 流式：通过 eventListener 回调 delta，返回拼接后的 ChatResponse */
     public ChatResponse chatStream(LlmProvider p, List<ChatMessage> messages,
-                                   List<ToolSchema> tools, double temperature, int maxTokens,
+                                   List<ToolSchema> tools, double temperature, int maxTokens,boolean thinking,
                                    StreamListener listener) throws IOException {
-        String body = adapter.buildStreamBody(p, messages, tools, temperature, maxTokens);
+        String body = adapter.buildStreamBody(p, messages, tools, temperature, maxTokens, thinking);
         Request req = new Request.Builder()
             .url(p.baseUrl().replaceAll("/$", "") + "/chat/completions")
             .header("Authorization", "Bearer " + p.apiKey())
@@ -123,6 +122,7 @@ public class ALlmClient {
                     if (choice.hasNonNull("finish_reason")) finish[0] = choice.get("finish_reason").asText();
                     if (n.has("usage")) usage[0] = adapter.parseUsage(n.get("usage"));
                 } catch (Exception e) {
+                    log.error(e.getMessage(), e);
                     log.warn("llm.stream.parse.fail data={}", abbreviate(data, 200), e);
                 }
             }

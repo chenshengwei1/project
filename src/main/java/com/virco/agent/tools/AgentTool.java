@@ -7,7 +7,7 @@ import java.lang.annotation.Target;
 
 @Target(ElementType.METHOD) @Retention(RetentionPolicy.RUNTIME)
 public @interface AgentTool {
-    String name();
+    String name() default "";
     String description();
     boolean idempotent() default true;
     long timeoutMs() default -1;   // -1 用全局

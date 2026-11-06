@@ -113,5 +113,5 @@ public record AgentProperties (
     public record Session(int ttlMinutes, long cleanupIntervalMs) {}
     public record Diag(int traceBufferSize, boolean exposeEndpoints) {}
     public record Log(boolean logRawResponse) {}
-    public record Tools(String workspaceRoot, boolean commandEnabled, List<String> commandAllowlist, long commandTimeoutMs, long fileMaxBytes) {}
+    public record Tools(String workspaceRoot, boolean commandEnabled, List<String> commandAllowlist, long commandTimeoutMs, long fileMaxBytes, String imageApiKey, String imageBaseEndpoint) {}
 }

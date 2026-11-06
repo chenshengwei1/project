@@ -1,4 +1,4 @@
-package com.virco.agent.service;
+package com.virco.agent.exception;
 
 import java.util.Map;
 
@@ -6,7 +6,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import com.virco.agent.model.LlmRouter.AllProvidersUnavailableException;
+import com.virco.agent.exception.ApiException.AllProvidersUnavailableException;
+
 
 @RestControllerAdvice
 public class AgentExceptionHandler {
@@ -18,10 +19,5 @@ public class AgentExceptionHandler {
     @ExceptionHandler(AgentException.class)
     public ResponseEntity<Map<String, Object>> agent(AgentException e) {
         return ResponseEntity.status(500).body(Map.of("code", e.code(), "message", e.userMessage()));
-    }
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, Object>> other(Exception e) {
-        return ResponseEntity.status(500).body(Map.of("code", "INTERNAL",
-            "message", "服务异常，请稍后重试"));
     }
 }

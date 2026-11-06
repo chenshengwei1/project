@@ -472,7 +472,11 @@
         .dropdown {
             position: absolute;
             top: 50px;
-            min-width: 200px;
+            min-width: 240px;
+            max-width: 340px;
+            max-height: min(70vh, 480px);   /* 关键：限制最大高度 */
+            overflow-y: auto;               /* 关键：超出滚动 */
+            overscroll-behavior: contain;   /* 防止滚动穿透 */
             padding: 6px;
             background: var(--bg);
             border: 1px solid var(--border);
@@ -1475,6 +1479,88 @@
             transform: translate(-50%, 0)
         }
 
+        /* 模型下拉分组 */
+        .dropdown-group + .dropdown-group {
+            margin-top: 4px;
+            padding-top: 4px;
+            border-top: 1px solid var(--border);
+        }
+
+        .dropdown-group-title {
+            font-size: 11.5px;
+            color: var(--text-3);
+            font-weight: 600;
+            letter-spacing: .3px;
+            text-transform: uppercase;
+            padding: 6px 10px 4px;
+            user-select: none;
+        }
+
+        .model-item {
+            align-items: flex-start;
+            padding: 9px 10px;
+        }
+
+        .model-item .dd-main {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .model-item .dd-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text);
+            line-height: 1.4;
+        }
+
+        .model-item .dd-meta {
+            font-size: 12px;
+            color: var(--text-2);
+            margin-top: 2px;
+            line-height: 1.4;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .model-item .dd-caps {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 4px;
+        }
+
+        .model-item .dd-cap {
+            font-size: 10.5px;
+            padding: 0 5px;
+            line-height: 16px;
+            border-radius: 4px;
+            background: var(--bg-3);
+            color: var(--text-2);
+            white-space: nowrap;
+        }
+
+        .model-item.selected {
+            background: var(--primary-soft);
+        }
+
+        .model-item.selected .dd-name {
+            color: var(--primary);
+        }
+
+        .model-item .dd-check {
+            color: var(--primary);
+            font-size: 14px;
+            font-weight: 700;
+            flex-shrink: 0;
+            margin-left: 8px;
+            line-height: 1.4;
+        }
+
+        [data-theme="dark"] .model-item .dd-cap {
+            background: var(--bg-4);
+        }
+
         /* 响应式 */
         @media (max-width:820px) {
             .sidebar {
@@ -1712,6 +1798,116 @@
         const $ = (s, r = document) => r.querySelector(s);
         const $$ = (s, r = document) => [...r.querySelectorAll(s)];
         const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+        /* provider 显示名 */
+        const PROVIDER_LABELS = {
+            openai: 'OpenAI',
+            deepseek: 'DeepSeek',
+            anthropic: 'Anthropic',
+            google: 'Google',
+            // 可按需扩展
+        };
+
+        function getProviderLabel(p) {
+            return PROVIDER_LABELS[p] || (p ? p.charAt(0).toUpperCase() + p.slice(1) : '其他');
+        }
+
+        /* 格式化上下文窗口 */
+        function formatContext(n) {
+            if (!n) return '';
+            if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+            if (n >= 1000) return Math.round(n / 1000) + 'K';
+            return String(n);
+        }
+
+        /* 按 provider 分组渲染模型下拉 */
+        function renderModelDropdown(models) {
+            const el = $('#modelDropdown');
+            if (!el) return;
+
+            // 分组（保持 items 中 provider 首次出现的顺序）
+            const groups = new Map();
+            models.forEach(m => {
+                const p = m.provider || 'other';
+                if (!groups.has(p)) groups.set(p, []);
+                groups.get(p).push(m);
+            });
+
+            let html = '';
+            for (const [provider, items] of groups) {
+                html += `<div class="dropdown-group">
+                    <div class="dropdown-group-title">${escapeHtml(getProviderLabel(provider))}</div>`;
+                items.forEach(m => {
+                    const caps = [];
+                    if (m.supportsDeepThink) caps.push('深度思考');
+                    if (m.supportsWebSearch) caps.push('联网');
+                    if (m.supportsVision) caps.push('视觉');
+                    const metaParts = [];
+                    if (m.description) metaParts.push(escapeHtml(m.description));
+                    if (m.contextWindow) metaParts.push(formatContext(m.contextWindow) + ' 上下文');
+                    const metaHtml = metaParts.length
+                        ? `<div class="dd-meta">${metaParts.join(' · ')}</div>`
+                        : '';
+                    const capsHtml = caps.length
+                        ? `<div class="dd-caps">${caps.map(c => `<span class="dd-cap">${c}</span>`).join('')}</div>`
+                        : '';
+                    const selected = m.id === State.prefs.modelId;
+                    html += `<div class="dropdown-item model-item${selected ? ' selected' : ''}" data-model="${escapeHtml(m.id)}" data-provider="${escapeHtml(provider)}">
+                        <div class="dd-main">
+                            <div class="dd-name">${escapeHtml(m.name || m.id)}</div>
+                            ${metaHtml}
+                            ${capsHtml}
+                        </div>
+                        ${selected ? '<span class="dd-check">✓</span>' : ''}
+                    </div>`;
+                });
+                html += `</div>`;
+            }
+            el.innerHTML = html;
+        }
+
+        /* 根据当前模型能力更新 pill 按钮可用状态 */
+        function updateModelCapabilityUI() {
+            const m = State.models.find(x => x.id === State.prefs.modelId);
+            const deepBtn = $('#pillDeep');
+            const webBtn = $('#pillWeb');
+
+            if (!m) {
+                deepBtn.disabled = false;
+                webBtn.disabled = false;
+                return;
+            }
+
+            // 深度思考
+            if (!m.supportsDeepThink) {
+                deepBtn.disabled = true;
+                if (State.prefs.deepThink) {
+                    State.prefs.deepThink = false;
+                    api.putPrefs({ deepThink: false }).catch(() => { });
+                }
+                deepBtn.classList.remove('active');
+                deepBtn.title = '当前模型不支持深度思考';
+            } else {
+                deepBtn.disabled = false;
+                deepBtn.title = '';
+                deepBtn.classList.toggle('active', !!State.prefs.deepThink);
+            }
+
+            // 联网
+            if (!m.supportsWebSearch) {
+                webBtn.disabled = true;
+                if (State.prefs.webSearch) {
+                    State.prefs.webSearch = false;
+                    api.putPrefs({ webSearch: false }).catch(() => { });
+                }
+                webBtn.classList.remove('active');
+                webBtn.title = '当前模型不支持联网搜索';
+            } else {
+                webBtn.disabled = false;
+                webBtn.title = '';
+                webBtn.classList.toggle('active', !!State.prefs.webSearch);
+            }
+        }
 
         function escapeHtml(s) {
             return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2401,7 +2597,7 @@
                     }
 
                     // 兜底：如果没有 message_start，收到 delta 或 thinking 时自动创建
-                    if (!activeMsg && ['delta', 'content', 'thinking', 'reasoning'].includes(evt.type)) {
+                    if (!activeMsg && ['delta', 'content', 'thinking', 'reasoning', 'meta'].includes(evt.type)) {
                         activeMsg = {
                             id: evt.messageId || ('m_' + uid()),
                             conversationId: convId,
@@ -2452,7 +2648,7 @@
                     if (evt.type === 'done') {
                         if (activeMsg) {
                             if (evt.message) {
-                                activeMsg.content = evt.message.content || activeMsg.content;
+                                activeMsg.content = evt.message.content || activeMsg.content || evt.message.toString();
                                 activeMsg.reasoning = evt.message.reasoning || activeMsg.reasoning;
                             }
                             activeMsg.status = 'complete';
@@ -2464,6 +2660,10 @@
                     // 6. 错误
                     if (evt.type === 'error') {
                         if (activeMsg) {
+                            if (evt.message) {
+                                activeMsg.content = evt.message.content || activeMsg.content;
+                                activeMsg.reasoning = evt.message.reasoning || activeMsg.reasoning;
+                            }
                             activeMsg.status = 'error';
                         }
                         toast('生成失败：' + (evt.message || evt.code || ''));
@@ -2804,6 +3004,9 @@
                 modelDropdown.classList.remove('show');
                 $('#modelSelect').setAttribute('aria-expanded', 'false');
                 try { await api.putPrefs({ modelId: State.prefs.modelId }); } catch (_) { }
+                renderModelDropdown(State.models);
+                updateModelCapabilityUI();
+                updateSendBtn();
                 toast('已切换到 ' + (m ? m.name : item.dataset.model));
             });
 
@@ -2894,7 +3097,7 @@
 
             input.addEventListener('input', () => { autoResize(input); updateSendBtn(); });
             input.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+                if (e.key === 'Enter' && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.isComposing) {
                     e.preventDefault();
                     if (isStreaming()) return;
                     sendMessage(input.value);
@@ -3035,12 +3238,8 @@
             bindEvents();
             updateSendBtn();
 
-            const modelDropdown = $('#modelDropdown');
-            modelDropdown.innerHTML = State.models.map(m => `
-                <div class="dropdown-item" data-model="${m.id}">
-                    <span>${escapeHtml(m.name)}</span>
-                    ${m.badge ? `<span class="badge">${escapeHtml(m.badge)}</span>` : ''}
-                </div>`).join('');
+            renderModelDropdown(State.models);
+            updateModelCapabilityUI();
 
             await renderSidebar();
 

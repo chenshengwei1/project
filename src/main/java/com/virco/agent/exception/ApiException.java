@@ -1,7 +1,6 @@
 package com.virco.agent.exception;
 
 import com.virco.agent.entity.ChatDTO;
-import com.virco.agent.entity.ChatDTO.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -12,6 +11,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class ApiException extends RuntimeException {
@@ -52,6 +52,22 @@ public class ApiException extends RuntimeException {
                 Map.of("fileName", fileName, "mimeType", mime == null ? "" : mime));
     }
 
+    public static AllProvidersUnavailableException allProvidersUnavailableException(List<Throwable> errors) {
+        return new AllProvidersUnavailableException(errors);
+    }
+
+    
+    // llm/AllProvidersUnavailableException.java
+    public static class AllProvidersUnavailableException extends RuntimeException {
+        public AllProvidersUnavailableException(List<Throwable> errors) {
+            super("所有模型不可用: " + errors.size() + " 个 provider 失败");
+        }
+    }
+    // llm/StreamAbortedException.java
+    public static class StreamAbortedException extends RuntimeException {
+        public StreamAbortedException(Throwable cause) { super(cause); }
+    }
+
     @RestControllerAdvice
     public static class Handler {
         private static final Logger log = LoggerFactory.getLogger(Handler.class);
@@ -72,11 +88,5 @@ public class ApiException extends RuntimeException {
                     new ChatDTO.ErrorBody("INVALID_PARAM", "validation failed", details)));
         }
 
-        @ExceptionHandler(Exception.class)
-        public ResponseEntity<ChatDTO.ErrorResponse> handleOthers(Exception e) {
-            log.error("unexpected error", e);
-            return ResponseEntity.status(500).body(new ChatDTO.ErrorResponse(
-                    new ChatDTO.ErrorBody("INTERNAL_ERROR", "internal error", Map.of())));
-        }
     }
 }

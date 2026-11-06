@@ -4,6 +4,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -163,8 +168,30 @@ public class CommandTool {
                 truncated = true;
             }
         }
-        String s = buf.toString(StandardCharsets.UTF_8);
+        // String s = buf.toString(StandardCharsets.UTF_8);
+        String s = decodeBestEffort(buf.toByteArray());
         return truncated ? s + "\n...[output truncated, limit=" + maxBytes + " bytes]" : s;
+    }
+
+    private static String decodeBestEffort(byte[] bytes) {
+        // 1) 严格 UTF-8 校验
+        CharsetDecoder dec = StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT);
+        try {
+            return dec.decode(ByteBuffer.wrap(bytes)).toString();
+        } catch (CharacterCodingException ignore) {
+            // 2) 不是合法 UTF-8 → 回退系统 ANSI 编码（Windows 中文下即 GBK）
+            Charset fallback;
+            try {
+                fallback = Charset.forName(System.getProperty("sun.jnu.encoding", "GBK"));
+                // 更稳的写法是直接 GBK：
+                // fallback = Charset.forName("GBK");
+            } catch (Exception e) {
+                fallback = Charset.forName("GBK");
+            }
+            return new String(bytes, fallback);
+        }
     }
 
     /** 终止进程及其子进程，并等待退出 */

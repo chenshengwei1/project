@@ -5,7 +5,7 @@
     {
       "icon": "fas fa-hand-peace",
       "title": "Hello 页面",
-      "description": "向世界说你好，最简单的 REST 与控制台交互",
+      "description": "向世界说你好，人工智能聊天",
       "url": "/chat.html"
     },
     {
@@ -18,24 +18,24 @@
       "icon": "fas fa-edit",
       "title": "表单练习",
       "description": "提交数据，演示 POST 请求与参数绑定",
-      "url": "/form"
+      "url": "/agent/diag/recent"
     },
     {
       "icon": "fas fa-info-circle",
       "title": "关于",
-      "description": "项目介绍、技术栈以及常用链接",
+      "description": "Agent项目聊天",
       "url": "/notokenchat.html"
     },
     {
       "icon": "fas fa-database",
-      "title": "数据展示",
+      "title": "Redis展示",
       "description": "数据库查询或内存数据展示",
-      "url": "/data"
+      "url": "/redis-health.html"
     },
     {
       "icon": "fas fa-cog",
       "title": "设置",
-      "description": "配置项演示或环境信息",
+      "description": "海量题库考试",
       "url": "/lianxi.html"
     }
   ]

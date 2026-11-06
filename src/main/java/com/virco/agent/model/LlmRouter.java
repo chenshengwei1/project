@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import com.virco.agent.config.AgentProperties;
 import com.virco.agent.config.ChatLlmProperties;
 import com.virco.agent.dialog.AgentMetrics;
+import com.virco.agent.exception.ApiException;
 
 import lombok.RequiredArgsConstructor;
 
@@ -52,7 +53,7 @@ public class LlmRouter {
             }
         }
         metrics.allProvidersDown();
-        throw new AllProvidersUnavailableException(errors);
+        throw new ApiException.AllProvidersUnavailableException(errors);
     }
 
     /** 流式：仅首 token 到达前允许 fallback；到达后失败直接抛出 */
@@ -65,7 +66,7 @@ public class LlmRouter {
             if (!health.available(p.name())) continue;
             AtomicBoolean firstTokenArrived = new AtomicBoolean(false);
             try {
-                ChatResponse r = client.chatStream(p, messages, tools, temperature(), maxTokens(),
+                ChatResponse r = client.chatStream(p, messages, tools, temperature(), maxTokens(),thinking(),
                     new ALlmClient.StreamListener() {
                         @Override public void onFirstToken() { firstTokenArrived.set(true); listener.onFirstToken(); }
                         @Override public void onDelta(String d) { listener.onDelta(d); }
@@ -73,18 +74,19 @@ public class LlmRouter {
                 health.success(p.name());
                 return r;
             } catch (Exception e) {
+                metrics.llmFail(e.getMessage());
                 health.failure(p.name());
                 errors.add(e);
                 if (firstTokenArrived.get()) {
                     // 已输出，不再切换，直接抛出
                     log.warn("llm.stream.abort.after.first_token provider={}", p.name());
-                    throw new StreamAbortedException(e);
+                    throw new ApiException.StreamAbortedException(e);
                 }
                 log.warn("llm.stream.fallback provider={} err={}", p.name(), e.toString());
             }
         }
         metrics.allProvidersDown();
-        throw new AllProvidersUnavailableException(errors);
+        throw new ApiException.AllProvidersUnavailableException(errors);
     }
 
     private double temperature() {
@@ -95,19 +97,13 @@ public class LlmRouter {
         Integer m = chat.defaults() != null ? chat.defaults().maxTokens() : null;
         return m != null ? m : 4096;
     }
+
+    private boolean thinking(){
+        return chat.defaults().chatTemplateKwargs().enableThinking();
+    }
     private void sleep(long ms) {
         try { Thread.sleep(ms + (long)(Math.random() * ms * 0.3)); }
         catch (InterruptedException e) { Thread.currentThread().interrupt(); }
     }
 
-    // llm/AllProvidersUnavailableException.java
-    public class AllProvidersUnavailableException extends RuntimeException {
-        public AllProvidersUnavailableException(List<Throwable> errors) {
-            super("所有模型不可用: " + errors.size() + " 个 provider 失败");
-        }
-    }
-    // llm/StreamAbortedException.java
-    public class StreamAbortedException extends RuntimeException {
-        public StreamAbortedException(Throwable cause) { super(cause); }
-    }
 }

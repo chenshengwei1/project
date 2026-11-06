@@ -13,6 +13,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import org.apache.catalina.util.StringUtil;
 import org.apache.tomcat.util.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,6 +24,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.virco.agent.config.AgentProperties;
@@ -30,6 +32,8 @@ import com.virco.agent.dialog.AgentMetrics;
 import com.virco.agent.model.ToolSchema;
 import com.virco.agent.react.ToolContext;
 import com.virco.agent.react.interceptor.ToolInterceptor;
+
+import io.micrometer.common.util.StringUtils;
 
 @Component
 public class ToolRegistry {
@@ -71,25 +75,73 @@ public class ToolRegistry {
     @Autowired private ApplicationContext applicationContext;
 
     private void register(Object bean, Method m, AgentTool at) {
+
+        String rawName = at.name().isBlank() ? m.getName() : at.name();
+        String name = toSnakeCase(rawName);   // 见下文风格选择
+
+        if (tools.containsKey(name)) {
+            ToolDescriptor existing = tools.get(name);
+            throw new IllegalStateException(
+                "工具名冲突: '" + name + "' 已被 " + existing.bean().getClass().getSimpleName()
+                + "#" + existing.method().getName() + " 占用，当前是 "
+                + bean.getClass().getSimpleName() + "#" + m.getName());
+        }
+
         Parameter[] params = m.getParameters();
         String[] names = new String[params.length];
         Class<?>[] types = new Class<?>[params.length];
         Map<String, Object> props = new LinkedHashMap<>();
         List<String> required = new ArrayList<>();
         for (int i = 0; i < params.length; i++) {
-            String name = params[i].isNamePresent() ? params[i].getName()
-                : "arg" + i;
-            names[i] = name;
+            String argPname = params[i].isNamePresent() ? params[i].getName()
+                : null;
+
+            ToolParam tp = params[i].getAnnotation(ToolParam.class);
+            // ① 参数名：@ToolParam.name() > 反射参数名
+            String pname = (tp != null && !tp.name().isBlank())
+                    ? tp.name()
+                    : null;
+            // ② 兜底：未加 @ToolParam 时，尝试 @JsonProperty（兼容旧代码
+            if (StringUtils.isBlank(pname)){
+                if (pname == null && tp == null && params[i].isAnnotationPresent(JsonProperty.class)) {
+                    pname = params[i].getAnnotation(JsonProperty.class).value();
+                }
+                if (StringUtils.isBlank(pname)){
+                    pname =  "arg" + i;
+                }
+            }
+
+            names[i] = pname;
             types[i] = params[i].getType();
-            props.put(name, schemaFor(params[i].getType()));
-            required.add(name);
+            // ③ 描述
+            String desc = tp != null ? tp.description() : null;
+
+            // ④ 生成该参数的 schema 片段
+            Map<String, Object> prop = new LinkedHashMap<>(schemaFor(params[i].getType()));
+            if (desc != null && !desc.isBlank()) {
+                prop.put("description", desc);
+            }
+
+            props.put(pname, prop);
+
+            // ⑤ required：有 @ToolParam 且 required=false 才排除；无注解默认必填
+            if (tp == null || tp.required()) {
+                required.add(pname);
+            }
+
+            // props.put(pname, schemaFor(params[i].getType()));
         }
         Map<String, Object> schema = Map.of(
             "type", "object",
             "properties", props,
             "required", required);
-        tools.put(at.name(), new ToolDescriptor(at.name(), at.description(), at.idempotent(),
+        tools.put(name, new ToolDescriptor(name, at.description(), at.idempotent(),
             at.timeoutMs(), bean, m, types, names, schema, required.toArray(new String[0])));
+    }
+
+    /** camelCase → snake_case，已有下划线则保持不变 */
+    private static String toSnakeCase(String s) {
+        return s.replaceAll("([a-z0-9])([A-Z])", "$1_$2").toLowerCase();
     }
 
     private Map<String, Object> schemaFor(Class<?> t) {
