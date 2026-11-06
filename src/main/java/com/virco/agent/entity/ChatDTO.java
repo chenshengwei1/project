@@ -64,6 +64,9 @@ public final class ChatDTO {
 
         @Min(value = 0, message = "年龄不能小于0")
         private Integer age;
+
+        @NotBlank(message = "密码不能为空")
+        private String passwordHash;
     }
 
     /** GET /me 的响应 */

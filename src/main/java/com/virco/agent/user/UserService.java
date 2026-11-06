@@ -90,6 +90,7 @@ public class UserService {
             user.setName(request.getName().trim());
             user.setEmail(request.getEmail().trim());
             user.setAge(request.getAge());
+            user.setPasswordHash(request.getPasswordHash() != null ? request.getPasswordHash() : "");
 
             users.add(user);
             persist();
@@ -143,9 +144,9 @@ public class UserService {
         Path path = Paths.get("data", "json", USER_FILE);
         if (!Files.exists(path)) {
             // 首次启动，写入示例数据
-            users.add(new User("u1001", "张伟", "zhangwei@example.com", 28));
-            users.add(new User("u1002", "李娜", "lina@example.com", 32));
-            users.add(new User("u1003", "王强", "wangqiang@example.com", 25));
+            users.add(new User("u1001", "张伟", "zhangwei@example.com", 28, ""));
+            users.add(new User("u1002", "李娜", "lina@example.com", 32, ""));
+            users.add(new User("u1003", "王强", "wangqiang@example.com", 25, ""));
             persist();
             return;
         }

@@ -165,7 +165,7 @@ public class AllChineseUserGenerator {
         String email = randomPinyinEmail() + "@" + randomDomain();
         int age = RND.nextInt(18, 61);
 
-        return new User(id, name, email, age);
+        return new User(id, name, email, age, "");
     }
 
     public static User randomUser() {

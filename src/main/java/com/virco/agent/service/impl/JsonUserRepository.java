@@ -37,16 +37,16 @@ public class JsonUserRepository implements UserRepository {
 
     @Override
     public Optional<UserRecord> findById(String id) {
-        return userService.findById(id).map(this::convert).
-                map(u -> {
-                    // 这里可以设置一些默认值或额外处理
-                    return u;
-                });
+        return Optional.ofNullable(userService.findAll().stream()
+                .filter(u -> u.getId().equals(id))
+                .findFirst()
+                .map(u -> convert(u))
+                .orElse(null));
     }
 
     @Override
     public UserRecord save(UserRecord user) {
-        userService.add(new UserRequest(user.id(), user.name(), user.email(), 18));
+        userService.add(new UserRequest(user.id(), user.name(), user.email(), 18, user.passwordHash()));
         return user;
     }
 
